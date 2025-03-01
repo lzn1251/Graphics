@@ -3,11 +3,17 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+
+enum class GGXType { Default = 0, Visible = 1, SphericalCaps = 2, SphericalCapsBounded = 3 };
+
 class GGX
 {
 public:
-	GGX(const glm::vec2& roughness, const glm::vec3& worldNormal = glm::vec3(0.0f, 0.0f, 1.0f), const glm::vec3& worldTangent = glm::vec3(1.0f, 0.0f, 0.0f))
-		: m_Roughness(roughness), m_WorldNormal(worldNormal), m_WorldTangent(worldTangent) {
+	GGX(const glm::vec2& roughness, const GGXType& type = GGXType::Default, const glm::vec3& worldNormal = glm::vec3(0.0f, 0.0f, 1.0f), const glm::vec3& worldTangent = glm::vec3(1.0f, 0.0f, 0.0f))
+     : m_Roughness(roughness),
+       m_GGXType(type),
+       m_WorldNormal(worldNormal),
+       m_WorldTangent(worldTangent) {
 		m_WorldBitangent = glm::cross(m_WorldNormal, m_WorldTangent);
 		m_LocalToWorld = glm::mat3(m_WorldTangent, m_WorldBitangent, m_WorldNormal);
 		m_WorldToLocal = glm::inverse(m_LocalToWorld);
@@ -16,13 +22,7 @@ public:
 	GGX(const GGX&) = delete;
 	GGX& operator=(const GGX&) = delete;
 
-	bool SampleAnisoGGX(const glm::vec2& sample, const glm::vec3& viewDir, glm::vec3& outDir, float& eval, float& pdf);
-
-	bool SampleAnisoGGXVisible(const glm::vec2& sample, const glm::vec3& viewDir, glm::vec3& outDir, float& eval, float& pdf);
-
-	bool SampleAnisoGGXVisibleSphericalCaps(const glm::vec2& sample, const glm::vec3& viewDir, glm::vec3& outDir, float& eval, float& pdf);
-
-	bool SampleAnisoGGXVisibleSphericalCapsBounded(const glm::vec2& sample, const glm::vec3& viewDir, glm::vec3& outDir, float& eval, float& pdf);
+	bool SampleGGX(const glm::vec2& sample, const glm::vec3& viewDir, glm::vec3& outDir, float& eval, float& pdf);
 
 public:
 	glm::vec3 SampleAnisoGGXNormal(const glm::vec2& sample, const glm::vec3& localV);
@@ -52,4 +52,6 @@ private:
 
 	glm::mat3 m_LocalToWorld;
 	glm::mat3 m_WorldToLocal;
+
+	GGXType m_GGXType;
 };

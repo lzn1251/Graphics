@@ -4,42 +4,36 @@
 
 // BRDF = F * D(H) * G(V, L) / (4.0f * dot(N, L) * dot(N, V))
 
-bool GGX::SampleAnisoGGX(const glm::vec2& sample, const glm::vec3& viewDir,
-                         glm::vec3& outDir, float& eval, float& pdf) {
-  glm::vec3 localV = m_WorldToLocal * viewDir;
-
-  glm::vec3 localH = SampleAnisoGGXNormal(sample, localV);
-  glm::vec3 localL = glm::reflect(localV, localH);
-  outDir = m_LocalToWorld * localL;
-
-  if (localL.z < 0.001f || glm::dot(m_WorldNormal, outDir) <= 0.f) return false;
-
-  float fresnel = 1.0f;
-
-  eval = (fresnel * DAnisoGGX(localH) * SmithAnisoGGXShadowG2(localL, localV)) /
-         (4.0f * localL.z * localV.z);
-
-  pdf = (DAnisoGGX(localH) * abs(localH.z));
-
-  eval *= localL.z;
-
-  if (pdf < 0.001f) return false;
-  return true;
-}
-
 // VNDF
 // D_V(N) = G1(V)max(0, V * N)D(N) / (V * Z)
 // PDF(L) = D_V(N) / (4 * (V * N))
 
-bool GGX::SampleAnisoGGXVisible(const glm::vec2& sample,
-                                const glm::vec3& viewDir, glm::vec3& outDir,
-                                float& eval, float& pdf) {
+bool GGX::SampleGGX(const glm::vec2& sample, const glm::vec3& viewDir,
+    glm::vec3& outDir, float& eval, float& pdf) {
   glm::vec3 localV = m_WorldToLocal * viewDir;
 
-  glm::vec3 localH = SampleAnisoGGXVisibleNormal(sample, localV);
+  glm::vec3 localH;
+
+  switch (m_GGXType) { 
+      case GGXType::Visible: {
+        localH = SampleAnisoGGXVisibleNormal(sample, localV);
+        break;
+      }
+      case GGXType::SphericalCaps: {
+        localH = SampleAnisoGGXVisibleNormalSphericalCaps(sample, localV);
+        break;
+      }            
+      case GGXType::SphericalCapsBounded: {
+        localH = SampleAnisoGGXVisibleNormalSphericalCapsBounded(sample, localV);
+        break;
+      }
+      default: {
+        localH = SampleAnisoGGXNormal(sample, localV);
+        break;
+      }
+  }
 
   glm::vec3 localL = glm::reflect(localV, localH);
-  outDir = m_LocalToWorld * localL;
 
   if (localL.z < 0.001f || glm::dot(m_WorldNormal, outDir) <= 0.f) return false;
 
@@ -48,60 +42,24 @@ bool GGX::SampleAnisoGGXVisible(const glm::vec2& sample,
   eval = (fresnel * DAnisoGGX(localH) * SmithAnisoGGXShadowG2(localL, localV)) /
          (4.0f * localL.z * localV.z);
 
-  pdf = (SmithAnisoGGXShadowG1(localV) * DAnisoGGX(localH)) / (4.0f * localV.z);
-
-  eval *= localL.z;
-
-  if (pdf < 0.001f) return false;
-  return true;
-}
-
-bool GGX::SampleAnisoGGXVisibleSphericalCaps(const glm::vec2& sample,
-                                             const glm::vec3& viewDir,
-                                             glm::vec3& outDir, float& eval,
-                                             float& pdf) {
-  glm::vec3 localV = m_WorldToLocal * viewDir;
-
-  glm::vec3 localH = SampleAnisoGGXVisibleNormalSphericalCaps(sample, localV);
-
-  glm::vec3 localL = glm::reflect(localV, localH);
-  outDir = m_LocalToWorld * localL;
-
-  if (localL.z < 0.001f || glm::dot(m_WorldNormal, outDir) <= 0.f) return false;
-
-  float fresnel = 1.0f;
-
-  eval = (fresnel * DAnisoGGX(localH) * SmithAnisoGGXShadowG2(localL, localV)) /
-         (4.0f * localL.z * localV.z);
-
-  pdf = (SmithAnisoGGXShadowG1(localV) * DAnisoGGX(localH)) / (4.0f * localV.z);
-
-  eval *= localL.z;
-
-  if (pdf < 0.001f) return false;
-  return true;
-}
-
-bool GGX::SampleAnisoGGXVisibleSphericalCapsBounded(const glm::vec2& sample,
-                                                    const glm::vec3& viewDir,
-                                                    glm::vec3& outDir,
-                                                    float& eval, float& pdf) {
-  glm::vec3 localV = m_WorldToLocal * viewDir;
-
-  glm::vec3 localH =
-      SampleAnisoGGXVisibleNormalSphericalCapsBounded(sample, localV);
-
-  glm::vec3 localL = glm::reflect(localV, localH);
-  outDir = m_LocalToWorld * localL;
-
-  if (localL.z < 0.001f || glm::dot(m_WorldNormal, outDir) <= 0.f) return false;
-
-  float fresnel = 1.0f;
-
-  eval = (fresnel * DAnisoGGX(localH) * SmithAnisoGGXShadowG2(localL, localV)) /
-         (4.0f * localL.z * localV.z);
-
-  pdf = GGXBoundedVndfPDF(localL, localV);
+  switch (m_GGXType) {
+    case GGXType::Visible: {
+      pdf = (SmithAnisoGGXShadowG1(localV) * DAnisoGGX(localH)) / (4.0f * localV.z);
+      break;
+    }
+    case GGXType::SphericalCaps: {
+      pdf = (SmithAnisoGGXShadowG1(localV) * DAnisoGGX(localH)) / (4.0f * localV.z);
+      break;
+    }
+    case GGXType::SphericalCapsBounded: {
+      pdf = GGXBoundedVndfPDF(localL, localV);
+      break;
+    }
+    default: {
+      pdf = (DAnisoGGX(localH) * abs(localH.z));
+      break;
+    }
+  }
 
   eval *= localL.z;
 
